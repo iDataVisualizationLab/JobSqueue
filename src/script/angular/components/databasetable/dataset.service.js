@@ -1,8 +1,12 @@
 'use strict';
-
+/* global console */
+/* global d3 */
 angular.module('hpccApp')
     .factory('Dataset', function ($http, $q, _, SampleData, Config) {
         var Dataset = {};
+        var now = new Date();
+        Dataset.fromTime = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        Dataset.toTime = now;
 
         // Start with the list of sample datasets
         var datasets = SampleData;
@@ -10,7 +14,7 @@ angular.module('hpccApp')
         Dataset.datasets = datasets;
         // Dataset.dataset = datasets[7];
         Dataset.dataset = datasets[0];
-        Dataset.currentDataset = undefined;  // dataset before update
+        Dataset.currentDataset = undefined; // dataset before update
         Dataset.stats = {};
         Dataset.type = undefined;
 
@@ -72,12 +76,16 @@ angular.module('hpccApp')
                             url: dataset.url,
                             responseType: 'arraybuffer'
                         }).then(function (datain) {
-                            var wb = XLSX.read(datain.data, {type: "array"});
+                            var wb = XLSX.read(datain.data, {
+                                type: "array"
+                            });
                             dataset.values = XLSX.utils.sheet_to_json(wb.Sheets[dataset.selectedOption]);
                             updateFromData(dataset, dataset.values);
                         });
                     } else if (dataset.type === 'csv') {
-                        updatePromise = $http.get(dataset.url, {cache: true}).then(function (response) {
+                        updatePromise = $http.get(dataset.url, {
+                            cache: true
+                        }).then(function (response) {
                             var data;
 
                             // first see whether the data is JSON, otherwise try to parse CSV
@@ -93,8 +101,8 @@ angular.module('hpccApp')
                             updateFromData(dataset, data);
                         });
 
-                    } else {
-                        debugger
+                    } else if (dataset.type === 'json') {
+                        // debugger
                         updatePromise = d3.json(dataset.url).then(function (response) {
                             var data;
                             // first see whether the data is JSON, otherwise try to parse CSV
@@ -103,6 +111,79 @@ angular.module('hpccApp')
                                 Dataset.type = 'json';
                             }
                             dataset.values = data;
+                            console.log(data);
+                            updateFromData(dataset, data);
+                        });
+                    } else {
+                        // console.log(Dataset.fromTime, Dataset.toTime)
+                        function transformJobsToQueueStatus(jobDetails) {
+                            const formatSecondsToHHMMSS = (seconds) => {
+                                const h = Math.floor(seconds / 3600);
+                                const m = Math.floor((seconds % 3600) / 60);
+                                const s = seconds % 60;
+                                return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+                            };
+
+                            const now = Math.floor(Date.now() / 1000);
+
+                            const queue_status = jobDetails.map(job => {
+                                // const now = Math.floor(Date.now() / 1000);
+                                const jobState = (job.job_state && job.job_state[0]) || "UNKNOWN";
+                                const submitTime = job.submit_time || 0;
+                                const startTime = job.start_time || submitTime;
+                                const endTime = job.end_time || now;
+                                const timeLimitSec = (job.time_limit || 0) * 60;
+
+                                let elapsedTime;
+                                if (["RUNNING", "PENDING"].includes(jobState)) {
+                                    elapsedTime = now - startTime;
+                                } else if (["COMPLETED", "FAILED", "CANCELLED", "OUT_OF_MEMORY", "TIMEOUT"].includes(jobState)) {
+                                    elapsedTime = endTime - startTime;
+                                } else {
+                                    elapsedTime = 0; // fallback
+                                }
+
+                                const remaining = timeLimitSec - elapsedTime;
+
+                                return {
+                                    ARRAY_JOB_ID: String(job.array_job_id || job.job_id || ''),
+                                    CPUS: job.cpus || (job.cpus_per_task || 1) * (job.tasks || 1),
+                                    JOBID: String(job.job_id || ''),
+                                    MIN_MEMORY: job.memory_per_node ? `${Math.floor(job.memory_per_node / 1024)}M` : "0M",
+                                    NAME: job.name || '',
+                                    NODELIST: job.nodes || [],
+                                    PARTITION: job.partition || '',
+                                    START_TIME: startTime,
+                                    STATE: jobState,
+                                    SUBMIT_TIME: submitTime,
+                                    TIME: formatSecondsToHHMMSS(elapsedTime),
+                                    TIME_LEFT: jobState === "RUNNING" && timeLimitSec > 0 && remaining > 0 ?
+                                        `${Math.floor(remaining / 86400)}-${formatSecondsToHHMMSS(remaining % 86400)}` :
+                                        "INVALID",
+                                    USER: job.user_name || ''
+                                };
+                            });
+
+                            return {
+                                queue_status,
+                                timestamp: now
+                            };
+                        }
+
+                        updatePromise = $http.post(dataset.url, {
+                            start: d3.timeFormat("%Y-%m-%d %H:%M:%S%Z")(Dataset.fromTime),
+                            end: d3.timeFormat("%Y-%m-%d %H:%M:%S%Z")(Dataset.toTime),
+                            interval: "5m",
+                            aggregation: "max",
+                            nodelist: "10.101.93.[1-8]",
+                            metrics: ["Jobs_Info"],
+                            compression: false
+                        }).then(function (response) {
+                            var data = response.data;
+                            Dataset.type = 'json';
+                            dataset.values = transformJobsToQueueStatus(data.job_details)
+                            // dataset.values = data;
+                            console.log("Fetched data:", dataset.values);
                             updateFromData(dataset, data);
                         });
                     }
@@ -123,10 +204,10 @@ angular.module('hpccApp')
                 });
                 return updatePromise
             }
-            if (dataset.repeat){
+            if (dataset.repeat) {
                 updatePromise = requestUpdate();
-                Dataset.timer = d3.interval(requestUpdate,dataset.repeat)
-            }else{
+                Dataset.timer = d3.interval(requestUpdate, dataset.repeat)
+            } else {
                 updatePromise = requestUpdate();
             }
 

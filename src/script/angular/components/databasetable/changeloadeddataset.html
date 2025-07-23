@@ -1,11 +1,21 @@
 <div class="change-loaded-dataset">
+  <!-- Date Time Filter -->
+  <div class="date-time-range" style="margin-bottom: 1rem;">
+    <label>
+      From:
+      <input type="datetime-local" ng-model="Dataset.fromTime" />
+    </label>
+    <label style="margin-left: 10px;">
+      To:
+      <input type="datetime-local" ng-model="Dataset.toTime" />
+    </label>
+  </div>
   <div ng-if="userData.length">
     <h6>Uploaded Datasets</h6>
     <ul>
       <li ng-repeat="dataset in userData track by dataset.id"
         ng-class="{selected: Dataset.currentDataset.id === dataset.id}">
-        <a class="dataset" ng-click="selectDataset(dataset)"
-          ng-disabled="Dataset.currentDataset.id === dataset.id">
+        <a class="dataset" ng-click="selectDataset(dataset)" ng-disabled="Dataset.currentDataset.id === dataset.id">
           <i class="fa fa-database"></i>
           <strong>{{dataset.name}}</strong>
         </a>
@@ -18,8 +28,7 @@
   <ul class="loaded-dataset-list">
     <li ng-repeat="dataset in sampleData track by dataset.id"
       ng-class="{selected: Dataset.currentDataset.id === dataset.id}">
-      <a class="dataset" ng-click="selectDataset(dataset)"
-        ng-disabled="Dataset.currentDataset.id === dataset.id">
+      <a class="dataset" ng-click="selectDataset(dataset)" ng-disabled="Dataset.currentDataset.id === dataset.id">
         <i class="fa fa-database"></i>
         <strong>{{dataset.name}}</strong>
       </a>

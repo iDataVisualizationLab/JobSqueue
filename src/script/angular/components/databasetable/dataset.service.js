@@ -60,62 +60,6 @@ angular.module('hpccApp')
                 delete Dataset.timer;
             }
 
-            function requestUpdate() {
-                if ((!dataset.repeat) && dataset.values) {
-                    updatePromise = $q(function (resolve, reject) {
-                        // jshint unused:false
-                        Dataset.type = undefined;
-                        updateFromData(dataset, dataset.values);
-                        resolve();
-                    });
-                } else {
-
-                    if (dataset.type === 'xlsx') {
-                        updatePromise = $http({
-                            method: 'GET',
-                            url: dataset.url,
-                            responseType: 'arraybuffer'
-                        }).then(function (datain) {
-                            var wb = XLSX.read(datain.data, {
-                                type: "array"
-                            });
-                            dataset.values = XLSX.utils.sheet_to_json(wb.Sheets[dataset.selectedOption]);
-                            updateFromData(dataset, dataset.values);
-                        });
-                    } else if (dataset.type === 'csv') {
-                        updatePromise = $http.get(dataset.url, {
-                            cache: true
-                        }).then(function (response) {
-                            var data;
-
-                            // first see whether the data is JSON, otherwise try to parse CSV
-                            if (_.isObject(response.data)) {
-                                data = response.data;
-                                Dataset.type = 'json';
-                            } else {
-                                data = d3.csvParse(scope.dataset.data);
-                                if (d3.keys(data[0]).length === 1)
-                                    data = d3.tsvParse(scope.dataset.data);
-                                Dataset.type = 'csv';
-                            }
-                            updateFromData(dataset, data);
-                        });
-
-                    } else if (dataset.type === 'json') {
-                        // debugger
-                        updatePromise = d3.json(dataset.url).then(function (response) {
-                            var data;
-                            // first see whether the data is JSON, otherwise try to parse CSV
-                            if (_.isObject(response)) {
-                                data = response;
-                                Dataset.type = 'json';
-                            }
-                            dataset.values = data;
-                            console.log(data);
-                            updateFromData(dataset, data);
-                        });
-                    } else {
-                        // console.log(Dataset.fromTime, Dataset.toTime)
                         function transformJobsToQueueStatus(jobDetails) {
                             const formatSecondsToHHMMSS = (seconds) => {
                                 const h = Math.floor(seconds / 3600);
@@ -170,6 +114,76 @@ angular.module('hpccApp')
                             };
                         }
 
+            function requestUpdate() {
+                if ((!dataset.repeat) && dataset.values) {
+                    updatePromise = $q(function (resolve, reject) {
+                        // jshint unused:false
+                        Dataset.type = undefined;
+                        updateFromData(dataset, dataset.values);
+                        resolve();
+                    });
+                } else {
+
+                    if (dataset.type === 'xlsx') {
+                        updatePromise = $http({
+                            method: 'GET',
+                            url: dataset.url,
+                            responseType: 'arraybuffer'
+                        }).then(function (datain) {
+                            var wb = XLSX.read(datain.data, {
+                                type: "array"
+                            });
+                            dataset.values = XLSX.utils.sheet_to_json(wb.Sheets[dataset.selectedOption]);
+                            updateFromData(dataset, dataset.values);
+                        });
+                    } else if (dataset.type === 'csv') {
+                        updatePromise = $http.get(dataset.url, {
+                            cache: true
+                        }).then(function (response) {
+                            var data;
+
+                            // first see whether the data is JSON, otherwise try to parse CSV
+                            if (_.isObject(response.data)) {
+                                data = response.data;
+                                Dataset.type = 'json';
+                            } else {
+                                data = d3.csvParse(scope.dataset.data);
+                                if (d3.keys(data[0]).length === 1)
+                                    data = d3.tsvParse(scope.dataset.data);
+                                Dataset.type = 'csv';
+                            }
+                            updateFromData(dataset, data);
+                        });
+
+                    } else if (dataset.type === 'json') {
+                        // debugger
+                        updatePromise = d3.json(dataset.url).then(function (response) {
+                            var data;
+                            // first see whether the data is JSON, otherwise try to parse CSV
+                            if (_.isObject(response)) {
+                                data = response;
+                                Dataset.type = 'json';
+                            }
+                            dataset.values = data;
+                            console.log(data);
+                            updateFromData(dataset, data);
+                        });
+                    } else if (dataset.type === 'json_new') {
+                        // debugger
+                        updatePromise = d3.json(dataset.url).then(function (response) {
+                            var data;
+                            // first see whether the data is JSON, otherwise try to parse CSV
+                            if (_.isObject(response)) {
+                                data = response;
+                                Dataset.type = 'json';
+                            }
+                            // dataset.values = data;
+                            dataset.values = transformJobsToQueueStatus(data.job_details)
+                            console.log(data);
+                            updateFromData(dataset, data);
+                        });
+                    }else {
+                        // console.log(Dataset.fromTime, Dataset.toTime)
                         updatePromise = $http.post(dataset.url, {
                             start: d3.timeFormat("%Y-%m-%d %H:%M:%S%Z")(Dataset.fromTime),
                             end: d3.timeFormat("%Y-%m-%d %H:%M:%S%Z")(Dataset.toTime),
